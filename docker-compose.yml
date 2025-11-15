@@ -1,0 +1,71 @@
+services:
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: zotcar_test_technique_postgres
+    environment:
+      POSTGRES_DB: zotcar_db
+      POSTGRES_USER: zotcar_user
+      POSTGRES_PASSWORD: zotcar_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - zotcar_test_technique_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zotcar_user -d zotcar_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Symfony
+  backend:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+    container_name: zotcar_test_technique_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../app:/var/www/html
+      - /var/www/html/var
+      - /var/www/html/vendor
+    environment:
+      DATABASE_URL: postgresql://zotcar_user:zotcar_password@postgres:5432/zotcar_db?serverVersion=15&charset=utf8
+      APP_ENV: dev
+      APP_SECRET: ${APP_SECRET:-a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+        - zotcar_test_technique_network
+    command: php -S 0.0.0.0:8000 -t public
+
+  # Frontend React.js
+  frontend:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    container_name: zotcar_test_technique_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../web:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    networks:
+      - zotcar_test_technique_network
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+
+networks:
+    zotcar_test_technique_network:
+      driver: bridge
